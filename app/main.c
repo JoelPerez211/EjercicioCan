@@ -8,6 +8,12 @@ void SystemClock_Config(void);
 /* Global variables */
 CUBA_HandleTypeDef      CUBA_Handle;    //Structure type variable that contains the configuration information for the CUBA library
 
+FDCAN_HandleTypeDef     USER_CAN_H;
+FDCAN_TxHeaderTypeDef   USER_CAN_TxHeader; 
+FDCAN_RxHeaderTypeDef   USER_CAN_RxHeader;
+
+uint32_t tick;
+
 int main( void )
 {
     /* Initialization function calls */
@@ -15,9 +21,58 @@ int main( void )
     SystemClock_Config();
     MOD_CUBA_Init(&CUBA_Handle);
 
+    tick = HAL_GetTick();
+
+    USER_CAN_H.Instance                     = FDCAN1;
+    USER_CAN_H.Init.Mode                    = FDCAN_MODE_NORMAL;
+    USER_CAN_H.Init.AutoRetransmission      = ENABLE;   
+    USER_CAN_H.Init.ClockDivider            = FDCAN_CLOCK_DIV1;
+    USER_CAN_H.Init.TxFifoQueueMode         = FDCAN_TX_FIFO_OPERATION;
+    USER_CAN_H.Init.TransmitPause           = DISABLE;
+    USER_CAN_H.Init.ExtFiltersNbr           = 0;
+    USER_CAN_H.Init.ProtocolException       = DISABLE;
+    USER_CAN_H.Init.StdFiltersNbr           = 0;
+    USER_CAN_H.Init.FrameFormat             = FDCAN_FRAME_CLASSIC;
+    USER_CAN_H.Init.NominalPrescaler        = 30;
+    USER_CAN_H.Init.NominalSyncJumpWidth    = 1;
+    USER_CAN_H.Init.NominalTimeSeg1         = 13;
+    USER_CAN_H.Init.NominalTimeSeg2         = 2;
+    (void)HAL_FDCAN_Init(&USER_CAN_H);
+
+    (void)HAL_FDCAN_Start(&USER_CAN_H);
+
+    USER_CAN_TxHeader.DataLength            = FDCAN_DLC_BYTES_8;
+    USER_CAN_TxHeader.Identifier            = 0x1EF;
+    USER_CAN_TxHeader.IdType                = FDCAN_STANDARD_ID;
+    USER_CAN_TxHeader.FDFormat              = FDCAN_CLASSIC_CAN;
+    USER_CAN_TxHeader.TxFrameType           = FDCAN_DATA_FRAME;
+    USER_CAN_TxHeader.BitRateSwitch         = FDCAN_BRS_OFF;
+    USER_CAN_TxHeader.TxEventFifoControl    = FDCAN_NO_TX_EVENTS;
+
+    USER_CAN_RxHeader.BitRateSwitch         = FDCAN_BRS_OFF;
+    USER_CAN_RxHeader.DataLength            = FDCAN_DLC_BYTES_8;
+    USER_CAN_RxHeader.ErrorStateIndicator   = FDCAN_ESI_PASSIVE;
+    USER_CAN_RxHeader.FDFormat              = FDCAN_CLASSIC_CAN;
+
+    uint32_t TxIndex;
+
+    uint8_t message[8] = {0x48, 0x49, 0x20, 0x57, 0x4F, 0x52, 0x4C, 0x44};
+
+    HAL_FDCAN_AddMessageToTxFifoQ(&USER_CAN_H, &USER_CAN_TxHeader, message);
+
+    TxIndex = HAL_FDCAN_GetLatestTxFifoQRequestBuffer( &USER_CAN_H);
+
+    while (HAL_FDCAN_IsTxBufferMessagePending(&USER_CAN_H, TxIndex));
+    
+
     for( ; ; )
     {
-        /* Add your code here */
+        if ((HAL_GetTick() - tick) >= 10u)
+        {
+            tick = HAL_GetTick();
+            (void)MOD_CUBA_PeriodicTask(&CUBA_Handle);
+        }
+        
     }
 
     return 0u;
